@@ -134,3 +134,238 @@
 // //check if password match(if not throw error)
 // //generate token=>(attached _id
 // //send token to postman (frontend)
+
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import { WebUser } from "../schema/model.js";
+import { secretKey } from "../utils/constant.js";
+import { sendEmail } from "../utils/sendMail.js";
+
+export const createWebUser = async (req, res, next) => {
+  try {
+    let data = req.body;
+
+    let hashedPassword = await bcrypt.hash(data.password, 10);
+
+    data = {
+      ...data,
+      isVerifiedEmail: false,
+      password: hashedPassword,
+    };
+
+    let result = await WebUser.create(data);
+    //generate token
+
+    let infoObj = {
+      _id: result._id,
+    };
+
+    let expiryInfo = {
+      expiresIn: "5d",
+    };
+
+    let token = await jwt.sign(infoObj, secretKey, expiryInfo);
+
+    //sendmail
+    await sendEmail({
+      from: "'n9solution',<mmgg839@getMaxListeners.com>",
+      to: result.email,
+      subject: "account created successfully",
+      html: `<h2>your account has been  created successfully </h2>
+      <a href="http:localhost:5000/verify-email?token=${token}">http:localhost:5000/verify-email?token=${token}</a>
+      `,
+    });
+    res.status(200).json({
+      success: true,
+      message: "webUser created successfully",
+      result: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const verifyEmail = async (req, res, next) => {
+  try {
+    let tokenString = req.headers.authorization;
+    let tokenArray = tokenString.split(" ");
+    let token = tokenArray[1];
+
+    let verifyToken = await jwt.verify(token, secretKey);
+    let _id = verifyToken._id;
+
+    let result = await WebUser.findByIdAndUpdate(
+      _id,
+      { isVerifiedEmail: true },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "email verified successfully",
+      result: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const loginUser = async (req, res, next) => {
+  try {
+    let email = req.body.email;
+    let password = req.body.password;
+
+    let user = await WebUser.findOne({ email: email });
+
+    if (user) {
+      if (user.isVerifiedEmail) {
+        let isValidPassword = await bcrypt.compare(password, user.password);
+        if (isValidPassword) {
+          let infoObj = {
+            _id: user._id,
+          };
+          let expiryInfo = {
+            expiresIn: "30d",
+          };
+
+          let token = await jwt.sign(infoObj, secretKey, expiryInfo);
+
+          res.status(200).json({
+            success: true,
+            message: "user login successfully...",
+            result: user,
+            token: token,
+          });
+        } else {
+          throw new Error("password does not match");
+        }
+      } else {
+        throw new Error("email not verified");
+      }
+    } else {
+      throw new Error("email does not exist");
+    }
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const myProfile = async (req, res, next) => {
+  try {
+    let _id = req._id;
+
+    let result = await WebUser.findById(_id);
+    res.status(200).json({
+      success: true,
+      message: "my profile visited successfully",
+      result: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const updateProfile = async (req, res, next) => {
+  try {
+    let _id = req._id;
+    let data = req.body;
+    delete data.email;
+    delete data.password;
+
+    let result = await WebUser.findByIdAndUpdate(_id, data, { new: true });
+
+    res.status(200).json({
+      success: true,
+      message: "webUser updated successfully",
+      result: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const updatePassword = async (req, res, next) => {
+  try {
+    let _id = req._id;
+    let oldPassword = req.body.oldPassword;
+    let newPassword = req.body.newPassword;
+
+    let user = await WebUser.findById(_id);
+    let isValidPassword = await bcrypt.compare(oldPassword, user.password);
+
+    if (isValidPassword) {
+      let hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      let result = await WebUser.findByIdAndUpdate(
+        _id,
+        { password: hashedPassword },
+        { new: true }
+      );
+      {
+        res.status(200).json({
+          success: true,
+          message: "password updated successfully",
+          result: result,
+        });
+      }
+    } else {
+      let error = new Error("old password does not match");
+      throw error;
+    }
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const readAllWebUsers = async (req, res, next) => {
+  try {
+    let result = await WebUser.find({});
+    console.log(result);
+    res.status(200).json({
+      success: true,
+      message: "all webUsers details...",
+      result: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const readSpecificWebUser = async (req, res, next) => {
+  try {
+    let id = req.params.id;
+
+    let result = await WebUser.findById(id);
+    res.status(200).json({
+      success: true,
+      message: "read specific user successfully...",
+      result: result,
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

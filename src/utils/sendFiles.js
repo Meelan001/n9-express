@@ -50,7 +50,7 @@ let fileFilter = (req, file, cb) => {
     //true means pass such type of file
     //null represent error since there us np error thus error is null
   } else {
-    cb(new Error("file uis not supported"), false);
+    cb(new Error("file is not supported"), false);
     //false means don't pass such type of file
   }
 };
